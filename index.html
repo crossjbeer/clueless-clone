@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clueless</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2e3244;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --accent:    #6366f1;
+      --accent-h:  #818cf8;
+      --hot:       #ef4444;
+      --warm:      #f59e0b;
+      --cool:      #3b82f6;
+      --cold:      #64748b;
+      --win:       #22c55e;
+      --radius:    10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem 4rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+    header h1 {
+      font-size: 2.8rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent-h), #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    header p {
+      color: var(--muted);
+      margin-top: 0.4rem;
+      font-size: 0.9rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 560px;
+    }
+
+    /* ── Input row ── */
+    .input-row {
+      display: flex;
+      gap: 0.6rem;
+    }
+    .input-row input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 1rem;
+      padding: 0.65rem 1rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .input-row input:focus { border-color: var(--accent); }
+    .input-row input::placeholder { color: var(--muted); }
+    .input-row button {
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius);
+      color: #fff;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 0.65rem 1.4rem;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .input-row button:hover:not(:disabled) { background: var(--accent-h); }
+    .input-row button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Feedback banner ── */
+    #feedback {
+      margin-top: 1rem;
+      padding: 0.7rem 1rem;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      font-weight: 500;
+      display: none;
+    }
+    #feedback.show { display: block; }
+    #feedback.error  { background: #2d1a1a; color: #f87171; border: 1px solid #7f1d1d; }
+    #feedback.result { background: #1a1f2e; color: var(--text);  border: 1px solid var(--border); }
+    #feedback.win    { background: #14291e; color: var(--win);   border: 1px solid #166534; }
+
+    /* ── Win overlay ── */
+    #win-banner {
+      display: none;
+      text-align: center;
+      margin-top: 1.2rem;
+      padding: 1.2rem;
+      border-radius: var(--radius);
+      background: #14291e;
+      border: 1px solid #166534;
+      color: var(--win);
+    }
+    #win-banner.show { display: block; }
+    #win-banner h2 { font-size: 1.5rem; margin-bottom: 0.3rem; }
+    #win-banner p  { font-size: 0.9rem; color: #86efac; }
+
+    /* ── Stats row ── */
+    .stats {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.5rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    .stats span { display: flex; align-items: center; gap: 0.3rem; }
+
+    /* ── Guess list ── */
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 1.6rem 0 0.7rem;
+    }
+
+    #guess-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    #guess-list:empty::after {
+      content: 'No guesses yet.';
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .guess-row {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      padding: 0.55rem 0.8rem;
+      border-radius: 7px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      animation: slide-in 0.2s ease;
+    }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .guess-word {
+      flex: 1;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .guess-bar-wrap {
+      flex: 2;
+      background: var(--border);
+      border-radius: 999px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .guess-bar {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+
+    .guess-dist {
+      font-size: 0.8rem;
+      font-weight: 700;
+      width: 3.8rem;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* temperature colour helpers */
+    .hot  { color: var(--hot);  }
+    .warm { color: var(--warm); }
+    .cool { color: var(--cool); }
+    .cold { color: var(--cold); }
+    .win-color { color: var(--win); }
+
+    .bg-hot  { background: var(--hot);  }
+    .bg-warm { background: var(--warm); }
+    .bg-cool { background: var(--cool); }
+    .bg-cold { background: var(--cold); }
+    .bg-win  { background: var(--win);  }
+
+    /* ── Spoil button ── */
+    #spoil-btn, #purge-btn {
+      display: block;
+      width: 100%;
+      margin-top: 1.2rem;
+      padding: 0.6rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    #spoil-btn:hover  { border-color: var(--hot);  color: var(--hot);  }
+    #purge-btn:hover  { border-color: var(--warm); color: var(--warm); }
+
+    #spoil-answer {
+      display: none;
+      margin-top: 0.7rem;
+      padding: 0.7rem 1rem;
+      border-radius: var(--radius);
+      background: #2d1a1a;
+      border: 1px solid #7f1d1d;
+      color: #f87171;
+      font-size: 1rem;
+      font-weight: 700;
+      text-align: center;
+    }
+    #spoil-answer.show { display: block; }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .legend span { display: flex; align-items: center; gap: 0.3rem; }
+    .legend .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Clueless</h1>
+  <p id="date-label">Loading…</p>
+</header>
+
+<div class="card">
+  <form class="input-row" id="guess-form" autocomplete="off">
+    <input
+      id="guess-input"
+      type="text"
+      placeholder="Type a word and press Enter…"
+      spellcheck="false"
+      autofocus
+    />
+    <button type="submit" id="submit-btn">Guess</button>
+  </form>
+
+  <div id="feedback"></div>
+  <div id="win-banner">
+    <h2>You got it! 🎉</h2>
+    <p id="win-msg"></p>
+  </div>
+
+  <div class="stats">
+    <span>Guesses today: <strong id="stat-total">—</strong></span>
+  </div>
+
+  <div class="section-title">Today's Guesses</div>
+  <div id="guess-list"></div>
+
+  <div style="display:flex;gap:0.6rem;margin-top:1.2rem;">
+    <button id="spoil-btn" style="flex:1">SPOIL ANSWER</button>
+    <button id="purge-btn" style="flex:1">PURGE TODAY'S ATTEMPTS</button>
+  </div>
+  <div id="spoil-answer"></div>
+
+  <div class="legend">
+    <span><span class="dot bg-win"></span>Correct</span>
+    <span><span class="dot bg-hot"></span>Hot (&lt; 5)</span>
+    <span><span class="dot bg-warm"></span>Warm (5 – 19)</span>
+    <span><span class="dot bg-cool"></span>Cool (20 – 49)</span>
+    <span><span class="dot bg-cold"></span>Cold (&ge; 50)</span>
+  </div>
+</div>
+
+<script>
+  const API = 'http://localhost:8000';
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function tempClass(score) {
+    if (score === 0)   return 'win-color';
+    if (score < 5)     return 'hot';
+    if (score < 20)    return 'warm';
+    if (score < 50)    return 'cool';
+    return 'cold';
+  }
+
+  function tempBgClass(score) {
+    if (score === 0)   return 'bg-win';
+    if (score < 5)     return 'bg-hot';
+    if (score < 20)    return 'bg-warm';
+    if (score < 50)    return 'bg-cool';
+    return 'bg-cold';
+  }
+
+  function tempLabel(score) {
+    if (score === 0)   return '🎯 Correct!';
+    if (score < 5)     return '🔥 Very hot';
+    if (score < 20)    return '☀️  Warm';
+    if (score < 50)    return '❄️  Cool';
+    return '🧊 Cold';
+  }
+
+  // Bar width: exponential score mapped to fill %, capped so huge scores don't break layout
+  function barWidth(score) {
+    return Math.max(2, Math.round(100 * Math.exp(-score / 20)));
+  }
+
+  function buildRow(entry) {
+    const row = document.createElement('div');
+    row.className = 'guess-row';
+    row.dataset.word = entry.word;
+
+    const tc  = tempClass(entry.score);
+    const bgc = tempBgClass(entry.score);
+    const bw  = barWidth(entry.score);
+
+    row.innerHTML = `
+      <span class="guess-word ${tc}">${escapeHtml(entry.word)}</span>
+      <div class="guess-bar-wrap">
+        <div class="guess-bar ${bgc}" style="width:${bw}%"></div>
+      </div>
+      <span class="guess-dist ${tc}">${entry.score}</span>
+    `;
+    return row;
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function showFeedback(type, html) {
+    const el = document.getElementById('feedback');
+    el.className = `show ${type}`;
+    el.innerHTML = html;
+  }
+
+  function hideFeedback() {
+    document.getElementById('feedback').className = '';
+  }
+
+  // ── Local guess state (sorted by distance, closest first) ─────────────────
+
+  let guessState = [];
+
+  function upsertGuess(entry) {
+    const idx = guessState.findIndex(g => g.word === entry.word);
+    if (idx !== -1) guessState[idx] = entry;
+    else guessState.push(entry);
+    guessState.sort((a, b) => a.score - b.score);
+  }
+
+  // ── Render full guess list ──────────────────────────────────────────────────
+
+  function renderGuesses(guesses) {
+    guessState = [...guesses].sort((a, b) => a.score - b.score);
+    const list = document.getElementById('guess-list');
+    list.innerHTML = '';
+    guessState.forEach(g => list.appendChild(buildRow(g)));
+    document.getElementById('stat-total').textContent = guessState.length;
+  }
+
+  // ── Insert/update a guess and re-render in sorted order ───────────────────
+
+  function addGuess(entry) {
+    upsertGuess(entry);
+    const list = document.getElementById('guess-list');
+    list.innerHTML = '';
+    guessState.forEach(g => list.appendChild(buildRow(g)));
+    document.getElementById('stat-total').textContent = guessState.length;
+  }
+
+  // ── Load initial state ─────────────────────────────────────────────────────
+
+  async function loadStatus() {
+    try {
+      const [statusRes, guessesRes] = await Promise.all([
+        fetch(`${API}/status`),
+        fetch(`${API}/guesses`),
+      ]);
+      if (!statusRes.ok || !guessesRes.ok) throw new Error();
+
+      const status  = await statusRes.json();
+      const guesses = await guessesRes.json();
+
+      document.getElementById('date-label').textContent =
+        `${status.date} · guess the secret word`;
+
+      renderGuesses(guesses.guesses);
+
+      if (status.solved) showWin(guesses.guesses.length);
+    } catch {
+      document.getElementById('date-label').textContent =
+        'Could not reach API — is the server running?';
+    }
+  }
+
+  // ── Win state ──────────────────────────────────────────────────────────────
+
+  function showWin(totalGuesses) {
+    const banner = document.getElementById('win-banner');
+    document.getElementById('win-msg').textContent =
+      `Found in ${totalGuesses} guess${totalGuesses === 1 ? '' : 'es'}.`;
+    banner.classList.add('show');
+    document.getElementById('guess-input').disabled = true;
+    document.getElementById('submit-btn').disabled = true;
+  }
+
+  // ── Form submit ────────────────────────────────────────────────────────────
+
+  document.getElementById('guess-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const input = document.getElementById('guess-input');
+    const btn   = document.getElementById('submit-btn');
+    const word  = input.value.trim().toLowerCase();
+
+    if (!word) return;
+
+    btn.disabled = true;
+    hideFeedback();
+
+    try {
+      const res = await fetch(`${API}/guess`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ word }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showFeedback('error', err?.detail ?? `Error ${res.status}`);
+        return;
+      }
+
+      const data = await res.json();
+      addGuess(data);
+
+      if (data.is_correct) {
+        const total = document.getElementById('guess-list').children.length;
+        showFeedback('win', `🎯 <strong>${data.word}</strong> is the secret word!`);
+        showWin(total);
+      } else {
+        showFeedback(
+          'result',
+          `<span class="${tempClass(data.score)}">
+            ${tempLabel(data.score)}
+          </span>
+          &nbsp;·&nbsp;
+          <strong>${escapeHtml(data.word)}</strong>
+          &nbsp; score: <strong>${data.score}</strong>`
+        );
+        input.value = '';
+        input.focus();
+      }
+    } catch {
+      showFeedback('error', 'Could not reach the API. Is the server running?');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ── Purge cache ────────────────────────────────────────────────────────────
+
+  document.getElementById('purge-btn').addEventListener('click', async () => {
+    if (!confirm('Clear all of today\'s guesses?')) return;
+    try {
+      await fetch(`${API}/cache`, { method: 'DELETE' });
+      guessState = [];
+      document.getElementById('guess-list').innerHTML = '';
+      document.getElementById('stat-total').textContent = '0';
+      document.getElementById('win-banner').classList.remove('show');
+      document.getElementById('guess-input').disabled = false;
+      document.getElementById('submit-btn').disabled = false;
+      document.getElementById('spoil-answer').classList.remove('show');
+      document.getElementById('spoil-btn').textContent = 'SPOIL ANSWER';
+      hideFeedback();
+    } catch {
+      showFeedback('error', 'Could not reach the API.');
+    }
+  });
+
+  // ── Spoil answer ───────────────────────────────────────────────────────────
+
+  document.getElementById('spoil-btn').addEventListener('click', async () => {
+    const box = document.getElementById('spoil-answer');
+    if (box.classList.contains('show')) {
+      box.classList.remove('show');
+      document.getElementById('spoil-btn').textContent = 'SPOIL ANSWER';
+      return;
+    }
+    try {
+      const res  = await fetch(`${API}/answer`);
+      const data = await res.json();
+      box.textContent = `Today's word: ${data.word}`;
+      box.classList.add('show');
+      document.getElementById('spoil-btn').textContent = 'HIDE ANSWER';
+    } catch {
+      box.textContent = 'Could not reach the API.';
+      box.classList.add('show');
+    }
+  });
+
+  // ── Boot ───────────────────────────────────────────────────────────────────
+
+  loadStatus();
+</script>
+</body>
+</html>
