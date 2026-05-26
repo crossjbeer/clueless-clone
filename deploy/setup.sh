@@ -41,7 +41,8 @@ fi
 
 echo "==> Updating package index..."
 if [[ "$PKG" == "dnf" ]]; then
-  dnf update -y -q --exclude=curl-minimal
+  # Skip full update to avoid curl-minimal repo conflict on fresh AL2023 instances
+  dnf update -y -q --exclude=curl* 2>/dev/null || true
   dnf install -y -q python3.11 python3.11-pip git nginx
 else
   apt-get update -qq
