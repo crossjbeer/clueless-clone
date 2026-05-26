@@ -7,6 +7,10 @@ Also requires S3_BUCKET to be set when USE_S3 is enabled.
 All keys are relative paths (e.g. "cache/2026-05-21.json", "used_words.txt").
 In S3 mode they become object keys directly under the bucket root.
 In local mode they resolve relative to the project directory.
+
+S3 Express One Zone buckets (name ends with --az-id--x-s3) require the
+s3express:CreateSession IAM permission on the EC2 instance role in addition
+to the standard s3:GetObject / s3:PutObject permissions.
 """
 
 import json
@@ -27,6 +31,21 @@ if _USE_S3 and not _BUCKET:
 
 # Lazy boto3 client — only imported when S3 is actually needed.
 _s3 = None
+
+
+def _raise_s3_friendly(exc: Exception) -> None:
+    """Re-raise S3 errors with actionable messages."""
+    msg = str(exc)
+    if "CreateSession" in msg or "AccessDenied" in msg:
+        is_express = _BUCKET.endswith("--x-s3")
+        hint = (
+            " S3 Express One Zone buckets require the 's3express:CreateSession' "
+            "IAM permission on the EC2 instance role."
+            if is_express
+            else " Check that the EC2 instance role has s3:GetObject/s3:PutObject on this bucket."
+        )
+        raise PermissionError(f"S3 access denied for bucket '{_BUCKET}'.{hint}") from exc
+    raise exc
 
 
 def _client():
@@ -63,12 +82,15 @@ def read_text(key: str) -> str | None:
 def write_text(key: str, content: str) -> None:
     """Write a text object by key, creating it if it doesn't exist."""
     if _USE_S3:
-        _client().put_object(
-            Bucket=_BUCKET,
-            Key=key,
-            Body=content.encode("utf-8"),
-            ContentType="application/json",
-        )
+        try:
+            _client().put_object(
+                Bucket=_BUCKET,
+                Key=key,
+                Body=content.encode("utf-8"),
+                ContentType="application/json",
+            )
+        except Exception as exc:
+            _raise_s3_friendly(exc)
     else:
         path = _BASE_DIR / key
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -81,6 +81,12 @@ echo "==> Installing Python dependencies (this downloads the model on first run)
 cd "$APP_DIR"
 HOME="$APP_DIR" uv sync --no-dev
 
+# ── IAM note ────────────────────────────────────────────────────────────────
+# The EC2 instance role must have the following permissions on the S3 bucket:
+#   s3:GetObject, s3:PutObject
+# If using an S3 Express One Zone directory bucket (name ends with --az-id--x-s3),
+# also add:
+#   s3express:CreateSession
 # ── 6. Write /etc/clueless.env ───────────────────────────────────────────────
 ENV_FILE="/etc/clueless.env"
 if [[ ! -f "$ENV_FILE" ]]; then
