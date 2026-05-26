@@ -42,7 +42,7 @@ fi
 echo "==> Updating package index..."
 if [[ "$PKG" == "dnf" ]]; then
   dnf update -y -q
-  dnf install -y -q python3.11 python3.11-pip git nginx curl
+  dnf install -y -q python3.11 python3.11-pip git nginx
 else
   apt-get update -qq
   apt-get install -y -q python3.11 python3.11-pip git nginx curl
