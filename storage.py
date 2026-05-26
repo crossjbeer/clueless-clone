@@ -19,6 +19,7 @@ load_dotenv()
 
 _USE_S3: bool = os.getenv("USE_S3", "false").lower() == "true"
 _BUCKET: str = os.getenv("S3_BUCKET", "")
+_REGION: str = os.getenv("AWS_DEFAULT_REGION", "us-east-2")
 _BASE_DIR: Path = Path(__file__).parent
 
 if _USE_S3 and not _BUCKET:
@@ -32,7 +33,7 @@ def _client():
     global _s3
     if _s3 is None:
         import boto3
-        _s3 = boto3.client("s3")
+        _s3 = boto3.client("s3", region_name=_REGION)
     return _s3
 
 

@@ -20,6 +20,7 @@ APP_USER="clueless"
 APP_DIR="/opt/clueless"
 REPO_URL="${REPO_URL:-}"          # Set via env or prompted below
 BUCKET="${S3_BUCKET:-}"
+AWS_REGION="${AWS_DEFAULT_REGION:-us-east-2}"
 ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}"
 
 # ── 0. Must run as root ──────────────────────────────────────────────────────
@@ -95,6 +96,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   cat > "$ENV_FILE" <<EOF
 USE_S3=true
 S3_BUCKET=${BUCKET}
+AWS_DEFAULT_REGION=${AWS_REGION}
 ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
 EOF
   chmod 600 "$ENV_FILE"
