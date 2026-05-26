@@ -17,3 +17,11 @@ dependencies = [
 # Generates a lockfile (uv.lock) on `uv sync`.
 # For AWS Lambda packaging, run:
 #   uv export --no-hashes -o requirements.txt
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
