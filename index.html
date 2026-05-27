@@ -257,13 +257,146 @@
       width: 8px; height: 8px; border-radius: 50%;
       display: inline-block;
     }
+
+    /* ── User modal ── */
+    #user-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    #user-modal-overlay.hidden { display: none; }
+
+    #user-modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2rem;
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    #user-modal h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      text-align: center;
+    }
+    #user-modal p {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .modal-btn-row {
+      display: flex;
+      gap: 0.7rem;
+      margin-top: 0.3rem;
+    }
+    .modal-btn {
+      flex: 1;
+      padding: 0.7rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .modal-btn:hover { border-color: var(--accent); background: var(--surface); }
+    .modal-btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .modal-btn.primary:hover { background: var(--accent-h); border-color: var(--accent-h); }
+    #modal-name-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 1rem;
+      padding: 0.65rem 1rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #modal-name-input:focus { border-color: var(--accent); }
+    #modal-name-input::placeholder { color: var(--muted); }
+    #modal-error {
+      color: #f87171;
+      font-size: 0.85rem;
+      text-align: center;
+      min-height: 1.2em;
+    }
+    #modal-back-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      text-align: center;
+      padding: 0;
+    }
+    #modal-back-btn:hover { color: var(--text); }
+
+    /* ── User badge in header ── */
+    #user-badge {
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    #user-badge button {
+      background: none;
+      border: none;
+      color: var(--accent-h);
+      font-size: 0.8rem;
+      cursor: pointer;
+      padding: 0;
+      margin-left: 0.4rem;
+    }
+    #user-badge button:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
 
+<!-- ── User modal ── -->
+<div id="user-modal-overlay">
+  <div id="user-modal">
+    <!-- Step 1: choose action -->
+    <div id="modal-step-choose">
+      <h2>Welcome to Clueless</h2>
+      <p>How would you like to play?</p>
+      <div class="modal-btn-row">
+        <button class="modal-btn" id="modal-signin-btn">Sign In</button>
+        <button class="modal-btn primary" id="modal-create-btn">New Player</button>
+      </div>
+    </div>
+    <!-- Step 2: enter name -->
+    <div id="modal-step-name" style="display:none">
+      <h2 id="modal-step-title">Sign In</h2>
+      <p id="modal-step-sub">Enter your username to continue.</p>
+      <input id="modal-name-input" type="text" maxlength="30"
+             placeholder="username" autocomplete="off" spellcheck="false" />
+      <div id="modal-error"></div>
+      <button class="modal-btn primary" id="modal-submit-btn">Continue</button>
+      <button id="modal-back-btn">← back</button>
+    </div>
+  </div>
+</div>
+
 <header>
   <h1>Clueless</h1>
   <p id="date-label">Loading…</p>
+  <p id="user-badge" style="display:none">
+    Playing as <strong id="user-badge-name"></strong>
+    <button id="switch-user-btn">switch</button>
+  </p>
 </header>
 
 <div class="card">
@@ -308,6 +441,25 @@
 
 <script>
   const API = '';
+  const STORAGE_KEY = 'clueless_user';
+
+  // ── Current user ───────────────────────────────────────────────────────────
+
+  let currentUser = null;
+
+  function getStoredUser() {
+    return localStorage.getItem(STORAGE_KEY) || null;
+  }
+
+  function setStoredUser(username) {
+    localStorage.setItem(STORAGE_KEY, username);
+    currentUser = username;
+  }
+
+  function clearStoredUser() {
+    localStorage.removeItem(STORAGE_KEY);
+    currentUser = null;
+  }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -335,7 +487,6 @@
     return '🧊 Cold';
   }
 
-  // Bar width: exponential score mapped to fill %, capped so huge scores don't break layout
   function barWidth(score) {
     return Math.max(2, Math.round(100 * Math.exp(-score / 20)));
   }
@@ -373,7 +524,113 @@
     document.getElementById('feedback').className = '';
   }
 
-  // ── Local guess state (sorted by distance, closest first) ─────────────────
+  // ── User modal ─────────────────────────────────────────────────────────────
+
+  const overlay       = document.getElementById('user-modal-overlay');
+  const stepChoose    = document.getElementById('modal-step-choose');
+  const stepName      = document.getElementById('modal-step-name');
+  const stepTitle     = document.getElementById('modal-step-title');
+  const stepSub       = document.getElementById('modal-step-sub');
+  const nameInput     = document.getElementById('modal-name-input');
+  const modalError    = document.getElementById('modal-error');
+  const submitBtn     = document.getElementById('modal-submit-btn');
+  const backBtn       = document.getElementById('modal-back-btn');
+
+  let modalMode = 'signin'; // 'signin' | 'create'
+
+  function showModalChoose() {
+    stepChoose.style.display = '';
+    stepName.style.display = 'none';
+    modalError.textContent = '';
+    nameInput.value = '';
+  }
+
+  function showModalName(mode) {
+    modalMode = mode;
+    stepChoose.style.display = 'none';
+    stepName.style.display = '';
+    modalError.textContent = '';
+    nameInput.value = '';
+    if (mode === 'signin') {
+      stepTitle.textContent = 'Sign In';
+      stepSub.textContent = 'Enter your username to continue.';
+      submitBtn.textContent = 'Sign In';
+    } else {
+      stepTitle.textContent = 'New Player';
+      stepSub.textContent = 'Choose a username (letters, digits, hyphens, underscores).';
+      submitBtn.textContent = 'Create Account';
+    }
+    setTimeout(() => nameInput.focus(), 50);
+  }
+
+  function hideModal() {
+    overlay.classList.add('hidden');
+  }
+
+  function showModal() {
+    overlay.classList.remove('hidden');
+    showModalChoose();
+  }
+
+  document.getElementById('modal-signin-btn').addEventListener('click', () => showModalName('signin'));
+  document.getElementById('modal-create-btn').addEventListener('click', () => showModalName('create'));
+  backBtn.addEventListener('click', showModalChoose);
+
+  submitBtn.addEventListener('click', handleModalSubmit);
+  nameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleModalSubmit();
+  });
+
+  async function handleModalSubmit() {
+    const username = nameInput.value.trim().toLowerCase();
+    modalError.textContent = '';
+
+    if (!username) {
+      modalError.textContent = 'Please enter a username.';
+      return;
+    }
+    if (!/^[a-z0-9_-]{1,30}$/.test(username)) {
+      modalError.textContent = 'Only letters, digits, hyphens, and underscores. Max 30 chars.';
+      return;
+    }
+
+    submitBtn.disabled = true;
+
+    try {
+      if (modalMode === 'signin') {
+        const res = await fetch(`${API}/users`);
+        const data = await res.json();
+        if (!data.users.includes(username)) {
+          modalError.textContent = `No account found for "${username}". Try creating one.`;
+          return;
+        }
+        setStoredUser(username);
+        hideModal();
+        initGame();
+
+      } else {
+        const res = await fetch(`${API}/users`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          modalError.textContent = err?.detail ?? `Error ${res.status}`;
+          return;
+        }
+        setStoredUser(username);
+        hideModal();
+        initGame();
+      }
+    } catch {
+      modalError.textContent = 'Could not reach the API. Is the server running?';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  }
+
+  // ── Local guess state ──────────────────────────────────────────────────────
 
   let guessState = [];
 
@@ -384,8 +641,6 @@
     guessState.sort((a, b) => a.score - b.score);
   }
 
-  // ── Render full guess list ──────────────────────────────────────────────────
-
   function renderGuesses(guesses) {
     guessState = [...guesses].sort((a, b) => a.score - b.score);
     const list = document.getElementById('guess-list');
@@ -393,8 +648,6 @@
     guessState.forEach(g => list.appendChild(buildRow(g)));
     document.getElementById('stat-total').textContent = guessState.length;
   }
-
-  // ── Insert/update a guess and re-render in sorted order ───────────────────
 
   function addGuess(entry) {
     upsertGuess(entry);
@@ -409,8 +662,8 @@
   async function loadStatus() {
     try {
       const [statusRes, guessesRes] = await Promise.all([
-        fetch(`${API}/status`),
-        fetch(`${API}/guesses`),
+        fetch(`${API}/status?user_id=${encodeURIComponent(currentUser)}`),
+        fetch(`${API}/guesses?user_id=${encodeURIComponent(currentUser)}`),
       ]);
       if (!statusRes.ok || !guessesRes.ok) throw new Error();
 
@@ -458,7 +711,7 @@
       const res = await fetch(`${API}/guess`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ word }),
+        body:    JSON.stringify({ word, user_id: currentUser }),
       });
 
       if (!res.ok) {
@@ -499,7 +752,7 @@
   document.getElementById('purge-btn').addEventListener('click', async () => {
     if (!confirm('Clear all of today\'s guesses?')) return;
     try {
-      await fetch(`${API}/cache`, { method: 'DELETE' });
+      await fetch(`${API}/cache?user_id=${encodeURIComponent(currentUser)}`, { method: 'DELETE' });
       guessState = [];
       document.getElementById('guess-list').innerHTML = '';
       document.getElementById('stat-total').textContent = '0';
@@ -535,9 +788,44 @@
     }
   });
 
+  // ── Switch user ────────────────────────────────────────────────────────────
+
+  document.getElementById('switch-user-btn').addEventListener('click', () => {
+    clearStoredUser();
+    // Reset game UI
+    guessState = [];
+    document.getElementById('guess-list').innerHTML = '';
+    document.getElementById('stat-total').textContent = '—';
+    document.getElementById('date-label').textContent = 'Loading…';
+    document.getElementById('win-banner').classList.remove('show');
+    document.getElementById('guess-input').disabled = false;
+    document.getElementById('submit-btn').disabled = false;
+    document.getElementById('spoil-answer').classList.remove('show');
+    document.getElementById('spoil-btn').textContent = 'SPOIL ANSWER';
+    document.getElementById('user-badge').style.display = 'none';
+    hideFeedback();
+    showModal();
+  });
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+
+  function initGame() {
+    const badge = document.getElementById('user-badge');
+    document.getElementById('user-badge-name').textContent = currentUser;
+    badge.style.display = '';
+    loadStatus();
+  }
+
   // ── Boot ───────────────────────────────────────────────────────────────────
 
-  loadStatus();
+  const stored = getStoredUser();
+  if (stored) {
+    currentUser = stored;
+    hideModal();
+    initGame();
+  } else {
+    showModal();
+  }
 </script>
 </body>
 </html>
