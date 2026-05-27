@@ -5,21 +5,14 @@ Default model: BAAI/bge-small-en-v1.5
   - Lightweight (~130 MB), strong semantic quality for single English words.
   - Downloaded once by sentence-transformers and cached locally.
 
-OpenAI model: text-embedding-3-small (requires USE_OPENAI_EMBEDDING=true and OPENAI_API_KEY)
-  - Calls the OpenAI Embeddings API instead of a local model.
-
 Distance: cosine distance = 1 - cosine_similarity, range [0, 2].
   A distance of 0 means the words are identical; lower is always better.
 """
-
-import os
 
 import numpy as np
 from dotenv import load_dotenv
 
 load_dotenv()
-
-_USE_OPENAI = os.getenv("USE_OPENAI_EMBEDDING", "false").lower() == "true"
 
 # ── Local (sentence-transformers) backend ────────────────────────────────────
 
@@ -47,45 +40,11 @@ def _embed_local(word: str) -> np.ndarray:
     vector = model.encode(word, normalize_embeddings=True)
     return np.array(vector, dtype=np.float32)
 
-
-# ── OpenAI backend ───────────────────────────────────────────────────────────
-
-_OPENAI_MODEL = "text-embedding-3-small"
-_openai_client = None
-
-
-def _get_openai_client():
-    global _openai_client
-    if _openai_client is None:
-        try:
-            from openai import OpenAI
-        except ImportError as exc:
-            raise RuntimeError("openai package is not installed — run: uv add openai") from exc
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is not set in the environment or .env file")
-        _openai_client = OpenAI(api_key=api_key)
-    return _openai_client
-
-
-def _embed_openai(word: str) -> np.ndarray:
-    client = _get_openai_client()
-    response = client.embeddings.create(model=_OPENAI_MODEL, input=word)
-    vector = np.array(response.data[0].embedding, dtype=np.float32)
-    # L2-normalise so cosine_distance() (which assumes unit vectors) is correct
-    norm = np.linalg.norm(vector)
-    if norm > 0:
-        vector = vector / norm
-    return vector
-
-
 # ── Public API ───────────────────────────────────────────────────────────────
 
 def embed(word: str) -> np.ndarray:
     """Return the L2-normalised embedding vector for *word*."""
     word = word.lower().strip()
-    if _USE_OPENAI:
-        return _embed_openai(word)
     return _embed_local(word)
 
 

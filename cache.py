@@ -1,23 +1,20 @@
 """
 cache.py — Per-day cache of guessed words and their cosine distances.
 
-Storage key: cache/YYYY-MM-DD.json  (local model)
-             cache/openai/YYYY-MM-DD.json  (OpenAI embedding model)
+Storage key: cache/YYYY-MM-DD.json
 Value format: JSON object mapping lowercase word strings to float distances.
 
 Example:  cache/2026-05-21.json
   {"river": 0.312, "ocean": 0.189, "lake": 0.401}
 
 Storage backend is determined by the USE_S3 env var (see storage.py).
-Cache namespace is determined by the USE_OPENAI_EMBEDDING env var.
 """
 
-import os
 from datetime import date
 
 import storage
 
-_CACHE_PREFIX = "cache/openai" if os.getenv("USE_OPENAI_EMBEDDING", "false").lower() == "true" else "cache"
+_CACHE_PREFIX = "cache"
 
 
 def _key(day: date) -> str:
