@@ -441,23 +441,15 @@
 
 <script>
   const API = '';
-  const STORAGE_KEY = 'clueless_user';
-
-  // ── Current user ───────────────────────────────────────────────────────────
+  // ── Current user (in-memory only — modal shown on every page load) ─────────
 
   let currentUser = null;
 
-  function getStoredUser() {
-    return localStorage.getItem(STORAGE_KEY) || null;
-  }
-
   function setStoredUser(username) {
-    localStorage.setItem(STORAGE_KEY, username);
     currentUser = username;
   }
 
   function clearStoredUser() {
-    localStorage.removeItem(STORAGE_KEY);
     currentUser = null;
   }
 
@@ -818,14 +810,7 @@
 
   // ── Boot ───────────────────────────────────────────────────────────────────
 
-  const stored = getStoredUser();
-  if (stored) {
-    currentUser = stored;
-    hideModal();
-    initGame();
-  } else {
-    showModal();
-  }
+  showModal();
 </script>
 </body>
 </html>
