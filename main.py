@@ -21,19 +21,41 @@ from contextlib import asynccontextmanager
 from datetime import date
 import math
 import os
+from pathlib import Path
 
 import re
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 from pydantic import BaseModel, field_validator
 
 from cache import get_cached_distance, load_cache, save_cache, store_distance
 from embeddings import embed
 from users import create_user, list_users, user_exists
 from words import get_daily_word
+
+_BASE_DIR = Path(__file__).parent
+
+# ---------------------------------------------------------------------------
+# Rate limiter — keyed by client IP (respects X-Forwarded-For from nginx)
+# ---------------------------------------------------------------------------
+
+def _get_client_ip(request: Request) -> str:
+    """Return the real client IP, preferring X-Forwarded-For when set by nginx."""
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # Header may contain a chain; the first address is the original client.
+        return forwarded_for.split(",")[0].strip()
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=_get_client_ip)
 
 # ---------------------------------------------------------------------------
 # App state — loaded once at startup
@@ -76,6 +98,14 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded. Please slow down."})
+
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
 _allow_origins: list[str] = [o.strip() for o in _raw_origins.split(",")] if _raw_origins != "*" else ["*"]
@@ -175,7 +205,14 @@ class CreateUserRequest(BaseModel):
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse("index.html")
+    return FileResponse(_BASE_DIR / "index.html")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """Return 204 so browsers don't log a 404 for missing favicon."""
+    from fastapi.responses import Response
+    return Response(status_code=204)
 
 
 @app.get("/users", response_model=UsersResponse)
@@ -185,21 +222,23 @@ def get_users() -> UsersResponse:
 
 
 @app.post("/users", status_code=201)
-def register_user(request: CreateUserRequest):
+@limiter.limit("10/minute")
+def register_user(request: Request, body: CreateUserRequest):
     """Register a new username. 409 if the name is taken or the game is full."""
-    ok, reason = create_user(request.username)
+    ok, reason = create_user(body.username)
     if not ok:
         raise HTTPException(status_code=409, detail=reason)
-    return {"username": request.username.strip().lower()}
+    return {"username": body.username.strip().lower()}
 
 
 @app.post("/guess", response_model=GuessResponse)
-def guess(request: GuessRequest) -> GuessResponse:
+@limiter.limit("60/minute")
+def guess(request: Request, body: GuessRequest) -> GuessResponse:
     """Submit a guess. Returns the cosine distance to today's secret word."""
     refresh_daily_state()
 
-    word = request.word
-    user_id = request.user_id
+    word = body.word
+    user_id = body.user_id
 
     if not user_exists(user_id):
         raise HTTPException(status_code=403, detail="Unknown user. Please sign in or create an account.")
@@ -241,7 +280,8 @@ class AnswerResponse(BaseModel):
 
 
 @app.get("/answer", response_model=AnswerResponse)
-def answer() -> AnswerResponse:
+@limiter.limit("10/minute")
+def answer(request: Request) -> AnswerResponse:
     """Reveal today's secret word (spoiler endpoint)."""
     refresh_daily_state()
     return AnswerResponse(word=state.secret_word)
